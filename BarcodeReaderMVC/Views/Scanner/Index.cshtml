@@ -1,0 +1,120 @@
+﻿@model  BarcodeReaderMVC.Models.RawImageData
+
+@{
+    ViewBag.Title = "Scan Barcode";
+}
+
+<h2>Scan Barcode</h2>
+
+<video id="video" style="border: 1px solid gray" width="600" autoplay></video>
+
+<div id="response-container">
+    <p>No barcode detected.</p>
+</div>
+
+@section Scripts {
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const videoRef = document.querySelector("video");
+                const canvas = document.createElement("canvas");
+                const context = canvas.getContext("2d");
+
+                // Checking for the mediaDevices support
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    // Get the environment camera (usually the rear camera on a smartphone)
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then((stream) => {
+                            // Get the environment camera (usually the rear camera on a smartphone)
+                            navigator.mediaDevices.enumerateDevices()
+                                .then((devices) => {
+                                    let devicess = devices.filter((device) => device.kind === 'videoinput');
+                                    //let selectedDeviceId = devicess[0]?.deviceId;
+                                       selectedDeviceId = devicess[devicess.length - 1]?.deviceId;
+                                    if (selectedDeviceId) {
+                                        startCamera(selectedDeviceId);
+                                    }
+                                }).catch((error) => {
+                                    setError(`Error enumerating devices: ${error}`);
+                                });
+                        })
+                        .catch((error) => {
+                            console.error("Error opening video camera.", error);
+                        });
+
+
+                    const startCamera = (cameraId) => {
+                        navigator.mediaDevices.getUserMedia({
+                            video: {
+                                deviceId: { exact: cameraId }
+                            }
+                        })
+                            .then((stream) => {
+                                videoRef.srcObject = stream;
+                                videoRef.setAttribute("playsinline", "true"); // required to tell iOS safari we don't want fullscreen
+                                videoRef.play();
+
+                                // Continuously capture and send frames to the server
+                                setInterval(() => {
+                                    captureAndSendFrame();
+                                }, 1000); // Adjust the interval as needed
+                            })
+                            .catch((error) => {
+                                console.error("Error opening video camera.", error);
+                            });
+                    }
+
+                    const captureAndSendFrame = async () => {
+                        if (videoRef) {
+                            canvas.width = videoRef.videoWidth;
+                            canvas.height = videoRef.videoHeight;
+                            context.drawImage(videoRef, 0, 0, canvas.width, canvas.height);
+
+                            // Convert the canvas to a data URL (Base64)
+                            const imageDataUrl = canvas.toDataURL();
+
+                            try {
+                                // Create an object to send to the server
+                                const rawImageData = {
+                                    Value: imageDataUrl,
+                                    Width: canvas.width,
+                                    Height: canvas.height
+                                };
+
+                                // Send the image data URL to the server using Fetch API
+                                let response = await fetch('/Scanner/Scan', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify(rawImageData)
+                                });
+
+                                if (!response.ok) {
+                                    throw new Error(`Network response was not ok, status: ${response.status}`);
+                                }
+
+                                // Handle the response from the server
+                                let serverResponse = await response.json();
+                                if (serverResponse) {
+                                    console.log(serverResponse)
+                                    updatePageWithResponse(serverResponse);
+                                }
+                            } catch (error) {
+                                console.error("Error sending frame to the server: " + error.message);
+                            }
+                        }
+                    };
+
+                    // Call this function to update the page if the response from the server is successful
+                    function updatePageWithResponse(response) {
+                        const container = document.getElementById('response-container');
+                        if (response.success && response.text) {
+                            container.innerHTML = `<p>Barcode Text: ${response.text}</p>`;
+                        }
+                    }
+                } else {
+                    setError("No camera found on this device.");
+                }
+            });
+        </script>
+    }
