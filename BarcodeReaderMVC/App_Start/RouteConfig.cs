@@ -16,7 +16,7 @@ namespace BarcodeReaderMVC
             routes.MapRoute(
                 name: "Default",
                 url: "{controller}/{action}/{id}",
-                defaults: new { controller = "Home", action = "Index", id = UrlParameter.Optional }
+                defaults: new { controller = "Scanner", action = "Index", id = UrlParameter.Optional }
             );
         }
     }
